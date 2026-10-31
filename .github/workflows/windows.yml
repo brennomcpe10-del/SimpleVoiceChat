@@ -20,16 +20,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          $archive = 'Horizon-Simple-Voice-Chat-RedeScreen-Edition-0.2.0-fontes (1).zip'
-          if (-not (Test-Path $archive)) { throw "Missing $archive. Upload the original Work ZIP before running this workflow." }
-          $expected = 'd01e9465e8729a4a52da0cc1a7dabfae0b7e1e83e0f676f3b2b8dd94d6917c68'
+          $archive = 'SimpleVoiceChat-v0.2.0-source.zip'
+          if (-not (Test-Path $archive)) { throw "Missing $archive. Remove the horizon/ folder from the original ZIP, rename it SimpleVoiceChat-v0.2.0-source.zip, and upload it." }
           $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected) { throw "Source ZIP SHA-256 mismatch: $actual" }
+          Write-Host "Uploaded source ZIP SHA-256: $actual"
           New-Item -ItemType Directory -Path work | Out-Null
           Expand-Archive -LiteralPath $archive -DestinationPath work
-          # Work's original archive contains a complete Horizon source snapshot.
-          # Replace it with the exact upstream commit for reproducible builds.
-          if (Test-Path 'work/horizon') { Remove-Item 'work/horizon' -Recurse -Force }
+          if (Test-Path 'work/horizon') { throw 'Unexpected full upstream Horizon source in archive' }
           if (-not (Test-Path 'work/integration/horizon.patch')) { throw 'Missing integration patch' }
           if (-not (Test-Path 'work/Cargo.lock')) { throw 'Missing Cargo.lock' }
 
