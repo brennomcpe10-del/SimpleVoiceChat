@@ -6,7 +6,7 @@ This repository hosts the **v0.2.0 source qualification workflow** for an experi
 
 ## Contents and workflow
 
-The source is distributed in **`SimpleVoiceChat-v0.2.0-source.zip`** (58,807 bytes; SHA-256 `fbdd8fc42ca2fe59bd9a079d568c2f8bc67a2b8b24a28e468aa09ba7f13db985`). It contains the standalone Rust voice core, integration patch, protocol tests, documentation and test helpers. The full upstream Horizon tree is deliberately excluded.
+The source is distributed in **`Horizon-Simple-Voice-Chat-RedeScreen-Edition-0.2.0-fontes (1).zip`** (original Work ZIP; SHA-256 `d01e9465e8729a4a52da0cc1a7dabfae0b7e1e83e0f676f3b2b8dd94d6917c68`). It contains the standalone Rust voice core, integration patch, protocol tests, documentation and test helpers. The original ZIP includes an upstream Horizon source snapshot, which CI discards and replaces with a pinned upstream checkout.
 
 The manually triggered **Windows voice qualification** workflow:
 
