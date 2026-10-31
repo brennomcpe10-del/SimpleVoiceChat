@@ -29,4 +29,30 @@ fn redescreen_voice_tick(game: &mut crate::game::Game<'_>) {
             })),
         }
     }
+    if ready {
+        if let Some(player) = game.player.as_ref() {
+            let position = [player.position.x, player.position.y, player.position.z];
+            let players = game.remote.as_ref()
+                .map(|r| crate::game::remote::redescreen_positions::snapshot(r, position))
+                .unwrap_or_default();
+            let open = game.native_setting(voice::ID, "mode").as_deref() == Some("open");
+            let talk = game.focused && (voice::ptt_held() || open);
+            let volume = game.native_setting(voice::ID, "volume")
+                .and_then(|s| s.parse::<u8>().ok())
+                .unwrap_or(100).min(100);
+            if let Some((protocol, muted, disabled)) =
+                voice::ipc_tick(position, game.yaw, &players, talk, volume)
+            {
+                let (channel, data) = if protocol == 20 {
+                    ("voicechat:update_state", vec![disabled as u8])
+                } else {
+                    ("voicechat:client_state", vec![muted as u8, disabled as u8])
+                };
+                game.send(Serverbound::CustomPayload(CustomPayload {
+                    channel: channel.into(),
+                    data,
+                }));
+            }
+        }
+    }
 }
