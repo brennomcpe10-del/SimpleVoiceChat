@@ -1,6 +1,10 @@
 name: Windows voice qualification (experimental)
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/windows.yml
 
 permissions:
   contents: read
@@ -20,12 +24,17 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          $archive = 'SimpleVoiceChat-v0.2.0-source.zip'
-          if (-not (Test-Path $archive)) { throw "Missing $archive. Remove the horizon/ folder from the original ZIP, rename it SimpleVoiceChat-v0.2.0-source.zip, and upload it." }
+          $archive = 'SimpleVoiceChat-v0.2.0-source.zip.zip'
+          if (-not (Test-Path $archive)) { throw "Missing $archive. Upload the owner-provided ZIP before running." }
           $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           Write-Host "Uploaded source ZIP SHA-256: $actual"
           New-Item -ItemType Directory -Path work | Out-Null
-          Expand-Archive -LiteralPath $archive -DestinationPath work
+          New-Item -ItemType Directory -Path work/source | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath work/source
+          $sourceRoot = @(Get-ChildItem -LiteralPath 'work/source' -Directory -Force)
+          if ($sourceRoot.Count -ne 1) { throw 'Expected one top-level source directory in uploaded ZIP' }
+          Get-ChildItem -LiteralPath $sourceRoot[0].FullName -Force | Move-Item -Destination work
+          Remove-Item 'work/source' -Recurse -Force
           if (Test-Path 'work/horizon') { throw 'Unexpected full upstream Horizon source in archive' }
           if (-not (Test-Path 'work/integration/horizon.patch')) { throw 'Missing integration patch' }
           if (-not (Test-Path 'work/Cargo.lock')) { throw 'Missing Cargo.lock' }
