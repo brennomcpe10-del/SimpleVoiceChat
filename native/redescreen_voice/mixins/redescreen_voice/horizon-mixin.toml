@@ -69,5 +69,5 @@ kind = "RETURN"
 target = "horizon_client::net::Session::poll"
 helper = "poll.rs"
 bindings = [
-  { name = "events", ty = "Vec<crate::net::Event>", value = "$value" },
+  { name = "events", ty = "Vec<Event>", value = "$value" },
 ]
