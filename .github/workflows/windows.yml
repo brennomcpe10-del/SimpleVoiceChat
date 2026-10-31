@@ -65,6 +65,12 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           cargo test --locked --features devices
 
+      - name: Install Java 21 for interoperability tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Protocol interoperability tests
         working-directory: work
         run: |
