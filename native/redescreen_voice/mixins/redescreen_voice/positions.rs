@@ -1,6 +1,6 @@
 // Collect nearby player UUIDs and positions for Simple Voice Chat proximity.
 // Kept inside remote.rs so private entity maps are accessed legitimately.
-pub(super) fn snapshot(
+pub(crate) fn snapshot(
     remote: &super::Remote,
     listener: [f64; 3],
 ) -> Vec<([u8; 16], [f64; 3])> {
