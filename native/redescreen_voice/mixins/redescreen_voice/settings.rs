@@ -7,8 +7,8 @@ fn redescreen_voice_settings(game: &mut crate::game::Game<'_>, mod_id: &str, but
     let mode = game.native_setting(voice::ID, "mode").unwrap_or_else(|| "ptt".into());
     let volume = game.native_setting(voice::ID, "volume").unwrap_or_else(|| "100".into());
     buttons.extend([
-        format!("Modo futuro: {}", if mode == "open" { "Microfone aberto" } else { "Push-to-talk" }),
-        format!("Volume futuro: {}%", volume),
+        format!("Modo: {}", if mode == "open" { "Microfone aberto" } else { "Push-to-talk" }),
+        format!("Volume: {}%", volume),
         format!("Estado: {}", voice::status()),
     ]);
 }
