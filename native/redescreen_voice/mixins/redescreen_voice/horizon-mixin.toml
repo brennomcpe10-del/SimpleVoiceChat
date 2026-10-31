@@ -20,12 +20,6 @@ source = "bridge.rs"
 visibility = "pub"
 
 [[module]]
-id = "ipc"
-file = "crates/horizon-client/src/game.rs"
-name = "redescreen_voice_ipc"
-source = "ipc.rs"
-
-[[module]]
 id = "positions"
 file = "crates/horizon-client/src/game/remote.rs"
 name = "redescreen_positions"
