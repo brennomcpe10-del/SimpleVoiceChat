@@ -64,11 +64,10 @@ bindings = [
 ]
 
 [[injection]]
-id = "packet"
-kind = "HEAD"
-target = "horizon_client::game::remote::Game<'_>::handle_packet"
-helper = "packet.rs"
+id = "poll"
+kind = "RETURN"
+target = "horizon_client::net::Session::poll"
+helper = "poll.rs"
 bindings = [
-  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
-  { name = "packet", ty = "&horizon_protocol::packets::play::Clientbound", value = "&packet" },
+  { name = "events", ty = "Vec<crate::net::Event>", value = "$value" },
 ]
