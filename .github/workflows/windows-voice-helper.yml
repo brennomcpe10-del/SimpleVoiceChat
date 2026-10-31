@@ -1,0 +1,59 @@
+name: Windows Voice Helper (original Horizon)
+
+on:
+  push:
+    branches: [native-hnmod]
+    paths:
+      - 'companion/**'
+      - '.github/workflows/windows-voice-helper.yml'
+      - 'SimpleVoiceChat-v0.2.0-source.zip.zip'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 50
+    steps:
+      - name: Checkout source and voice helper
+        uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Extract tested Simple Voice Chat Rust core
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath "SimpleVoiceChat-v0.2.0-source.zip.zip" -DestinationPath "voice-core" -Force
+          $manifest = Get-ChildItem -Path "voice-core" -Filter "Cargo.toml" -Recurse | Select-Object -First 1
+          if (-not $manifest) { throw "Missing Cargo.toml in source ZIP" }
+          $project = $manifest.Directory.FullName
+          New-Item -ItemType Directory -Force -Path (Join-Path $project "src/bin") | Out-Null
+          Copy-Item "companion/voice_helper.rs" (Join-Path $project "src/bin/voice_helper.rs")
+          "VOICE_PROJECT=$project" >> $env:GITHUB_ENV
+      - name: Unit tests including Windows audio
+        shell: pwsh
+        run: |
+          Set-Location $env:VOICE_PROJECT
+          cargo test --locked --features devices
+      - name: Build independent low-resource audio helper
+        shell: pwsh
+        run: |
+          Set-Location $env:VOICE_PROJECT
+          cargo build --release --locked --features devices --bin voice_helper
+      - name: Stage helper executable and checksum
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "dist" | Out-Null
+          Copy-Item (Join-Path $env:VOICE_PROJECT "target/release/voice_helper.exe") "dist/redescreen-voice-helper.exe"
+          (Get-FileHash "dist/redescreen-voice-helper.exe" -Algorithm SHA256).Hash | Out-File "dist/SHA256.txt" -Encoding ascii
+      - name: Upload companion (not a Horizon executable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: redescreen-voice-helper-windows-x64
+          path: dist/*
+          if-no-files-found: error
