@@ -9,6 +9,6 @@ fn redescreen_voice_settings(game: &mut crate::game::Game<'_>, mod_id: &str, but
     buttons.extend([
         format!("Modo futuro: {}", if mode == "open" { "Microfone aberto" } else { "Push-to-talk" }),
         format!("Volume futuro: {}%", volume),
-        "Estado: SEM AUDIO / EM DESENVOLVIMENTO".into(),
+        format!("Estado: {}", voice::status()),
     ]);
 }
