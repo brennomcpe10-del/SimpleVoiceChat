@@ -44,5 +44,5 @@ jobs:
       - name: Check with Horizon's actual registry checker
         shell: bash
         run: |
-          FILE="$GITHUB_WORKSPACE/horizon-mods/native/target/redescreen_voice-0.3.0-alpha.2.hnmod"
+          FILE="$GITHUB_WORKSPACE/horizon-mods/native/target/redescreen_voice-0.4.0-beta.1.hnmod"
           cargo run --locked --manifest-path horizon/Cargo.toml -p cargo-horizon-mod -- check "$FILE" --json
