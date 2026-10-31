@@ -2,7 +2,7 @@
 use std::cell::Cell;
 
 pub const ID: &str = "redescreen_voice";
-pub const VERSION: &str = "0.3.0-alpha.1";
+pub const VERSION: &str = "0.3.0-alpha.2";
 
 thread_local! {
     static PTT_HELD: Cell<bool> = const { Cell::new(false) };
@@ -161,5 +161,129 @@ pub mod protocol {
             super::super::set_ptt(false);
             assert!(!super::super::ptt_held());
         }
+    }
+}
+
+// Session negotiation uses Horizon's own Minecraft connection. It never
+// creates a second client or sends credentials to any third-party endpoint.
+use std::{cell::RefCell, time::{Duration, Instant}};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Action {
+    Register,
+    Request(i32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stage {
+    Disconnected,
+    Waiting,
+    SecretReceived,
+    Unavailable,
+}
+
+struct Negotiation {
+    address: String,
+    attempts: u8,
+    protocol: i32,
+    next_attempt: Option<Instant>,
+    stage: Stage,
+    secret: Option<protocol::SecretPacket>,
+}
+impl Default for Negotiation {
+    fn default() -> Self {
+        Self {
+            address: String::new(),
+            attempts: 0,
+            protocol: 0,
+            next_attempt: None,
+            stage: Stage::Disconnected,
+            secret: None,
+        }
+    }
+}
+thread_local! {
+    static NEGOTIATION: RefCell<Negotiation> = RefCell::new(Negotiation::default());
+}
+
+/// A maximum of four requests (21, 20, 21, 20) at six-second intervals.
+pub fn on_tick(address: Option<&str>, ready: bool) -> Vec<Action> {
+    NEGOTIATION.with(|cell| {
+        let mut state = cell.borrow_mut();
+        let address = address.unwrap_or_default();
+        if !ready || address.is_empty() {
+            *state = Negotiation::default();
+            return Vec::new();
+        }
+        if state.address != address {
+            *state = Negotiation { address: address.to_owned(), stage: Stage::Waiting, ..Negotiation::default() };
+        }
+        if state.secret.is_some() || state.stage == Stage::Unavailable {
+            return Vec::new();
+        }
+        if state.next_attempt.is_some_and(|time| Instant::now() < time) {
+            return Vec::new();
+        }
+        if state.attempts >= 4 {
+            state.stage = Stage::Unavailable;
+            return Vec::new();
+        }
+        state.protocol = if state.attempts % 2 == 0 { 21 } else { 20 };
+        state.attempts += 1;
+        state.next_attempt = Some(Instant::now() + Duration::from_secs(6));
+        vec![Action::Register, Action::Request(state.protocol)]
+    })
+}
+
+/// Reject malformed, unsolicited and out-of-session server packets.
+pub fn on_secret(bytes: &[u8]) {
+    if bytes.len() > 65536 {
+        return;
+    }
+    NEGOTIATION.with(|cell| {
+        let mut state = cell.borrow_mut();
+        if state.address.is_empty() || state.attempts == 0 || state.secret.is_some() {
+            return;
+        }
+        if let Ok(packet) = protocol::parse_version(bytes, state.protocol) {
+            if packet.voice_port > 0 && packet.voice_port <= u16::MAX as i32
+                && packet.mtu_size >= 128 && packet.mtu_size <= 65535
+                && packet.keep_alive > 0 && packet.keep_alive <= 60000
+                && packet.voice_chat_distance.is_finite()
+                && packet.voice_chat_distance >= 0.0
+            {
+                state.secret = Some(packet);
+                state.stage = Stage::SecretReceived;
+            }
+        }
+    });
+}
+
+pub fn status() -> &'static str {
+    NEGOTIATION.with(|cell| match cell.borrow().stage {
+        Stage::Disconnected => "Aguardando entrada em um servidor",
+        Stage::Waiting => "Solicitando chave de voz ao servidor",
+        Stage::SecretReceived => "Chave recebida; transporte de audio ainda nao implementado",
+        Stage::Unavailable => "Servidor nao respondeu ao protocolo de voz",
+    })
+}
+
+#[cfg(test)]
+mod negotiation_tests {
+    use super::*;
+    #[test]
+    fn requests_both_protocols_and_resets_on_disconnect() {
+        assert!(on_tick(None, false).is_empty());
+        assert_eq!(on_tick(Some("localhost:25565"), true),
+            vec![Action::Register, Action::Request(21)]);
+        assert!(on_tick(Some("localhost:25565"), true).is_empty());
+        assert!(on_tick(None, false).is_empty());
+        assert_eq!(status(), "Aguardando entrada em um servidor");
+    }
+    #[test]
+    fn unsolicited_secret_does_not_create_session() {
+        on_tick(None, false);
+        on_secret(&[0; 100]);
+        assert_eq!(status(), "Aguardando entrada em um servidor");
     }
 }
