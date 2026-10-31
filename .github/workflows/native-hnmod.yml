@@ -1,0 +1,90 @@
+name: Native HNMOD (diagnostic, not playable)
+
+on:
+  push:
+    branches: [native-hnmod]
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-hnmod.yml'
+      - 'README_NATIVE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout native adapter
+        uses: actions/checkout@v4
+      - name: Checkout official Horizon mods tooling
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mods
+          ref: 3fc6964447ff1ace0bdb252b65b1a273649e5ef4
+          path: horizon-mods
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Copy native mod to official tree
+        shell: bash
+        run: cp -a native/redescreen_voice horizon-mods/native/redescreen_voice
+      - name: Test standalone native runtime and protocol parser
+        working-directory: horizon-mods/native/redescreen_voice
+        run: cargo test
+      - name: Package using Horizon's official native.py
+        working-directory: horizon-mods
+        run: python3 native/tools/native.py package redescreen_voice
+      - name: Inspect package layout and compatibility
+        working-directory: horizon-mods
+        shell: python
+        run: |
+          import json, zipfile
+          path='native/target/redescreen_voice-0.3.0-alpha.1.hnmod'
+          with zipfile.ZipFile(path) as z:
+              names=set(z.namelist())
+              manifest=json.loads(z.read('horizon-native.json'))
+              assert manifest['id']=='redescreen_voice'
+              assert manifest['version']=='0.3.0-alpha.1'
+              assert manifest['game']=='26.3'
+              assert manifest['hooks']==1
+              assert 'mixins/redescreen_voice/horizon-mixin.toml' in names
+              assert 'mixins/redescreen_voice/runtime.rs' in names
+              assert all(n=='horizon-native.json' or n.endswith(('.rs','.toml')) for n in names)
+              print('Native source package structure: PASS')
+      - name: Upload development-only source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: redescreen-voice-hnmod-NOT-PLAYABLE
+          path: horizon-mods/native/target/redescreen_voice-0.3.0-alpha.1.hnmod
+          if-no-files-found: error
+
+  compile:
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout native adapter
+        uses: actions/checkout@v4
+      - name: Checkout official Horizon mods tooling
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mods
+          ref: 3fc6964447ff1ace0bdb252b65b1a273649e5ef4
+          path: horizon-mods
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Horizon native build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y rsync pkg-config libasound2-dev libudev-dev libx11-dev libxkbcommon-dev libwayland-dev libssl-dev cmake
+      - name: Copy native mod to official tree
+        run: cp -a native/redescreen_voice horizon-mods/native/redescreen_voice
+      - name: Check native mod on pinned Horizon
+        working-directory: horizon-mods
+        env:
+          CARGO_BUILD_JOBS: '2'
+        run: python3 native/tools/native.py check redescreen_voice
+      - name: Check native mod on latest Nightly
+        working-directory: horizon-mods
+        env:
+          CARGO_BUILD_JOBS: '2'
+        run: python3 native/tools/native.py check redescreen_voice --horizon latest
