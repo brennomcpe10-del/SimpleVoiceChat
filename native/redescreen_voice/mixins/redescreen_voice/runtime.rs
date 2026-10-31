@@ -2,7 +2,7 @@
 use std::cell::Cell;
 
 pub const ID: &str = "redescreen_voice";
-pub const VERSION: &str = "0.3.0-alpha.2";
+pub const VERSION: &str = "0.4.0-beta.1";
 
 thread_local! {
     static PTT_HELD: Cell<bool> = const { Cell::new(false) };
@@ -189,6 +189,13 @@ struct Negotiation {
     next_attempt: Option<Instant>,
     stage: Stage,
     secret: Option<protocol::SecretPacket>,
+    raw_secret: Option<Vec<u8>>,
+    ipc: Option<crate::game::redescreen_voice_ipc::Ipc>,
+    last_hello: Option<Instant>,
+    last_state: Option<Instant>,
+    helper_status: Option<u8>,
+    last_helper_reply: Option<Instant>,
+    last_reported: Option<(bool, bool)>,
 }
 impl Default for Negotiation {
     fn default() -> Self {
@@ -199,6 +206,13 @@ impl Default for Negotiation {
             next_attempt: None,
             stage: Stage::Disconnected,
             secret: None,
+            raw_secret: None,
+            ipc: None,
+            last_hello: None,
+            last_state: None,
+            helper_status: None,
+            last_helper_reply: None,
+            last_reported: None,
         }
     }
 }
@@ -212,10 +226,12 @@ pub fn on_tick(address: Option<&str>, ready: bool) -> Vec<Action> {
         let mut state = cell.borrow_mut();
         let address = address.unwrap_or_default();
         if !ready || address.is_empty() {
+            if let Some(ipc) = state.ipc.as_ref() { ipc.stop(); }
             *state = Negotiation::default();
             return Vec::new();
         }
         if state.address != address {
+            if let Some(ipc) = state.ipc.as_ref() { ipc.stop(); }
             *state = Negotiation { address: address.to_owned(), stage: Stage::Waiting, ..Negotiation::default() };
         }
         if state.secret.is_some() || state.stage == Stage::Unavailable {
@@ -253,6 +269,7 @@ pub fn on_secret(bytes: &[u8]) {
                 && packet.voice_chat_distance >= 0.0
             {
                 state.secret = Some(packet);
+                state.raw_secret = Some(bytes.to_vec());
                 state.stage = Stage::SecretReceived;
             }
         }
@@ -263,8 +280,58 @@ pub fn status() -> &'static str {
     NEGOTIATION.with(|cell| match cell.borrow().stage {
         Stage::Disconnected => "Aguardando entrada em um servidor",
         Stage::Waiting => "Solicitando chave de voz ao servidor",
-        Stage::SecretReceived => "Chave recebida; transporte de audio ainda nao implementado",
+        Stage::SecretReceived => {
+            if state_is_helper_online(&cell.borrow()) { "Conectado ao auxiliar de voz" }
+            else { "Chave recebida; inicie o auxiliar de voz" }
+        },
         Stage::Unavailable => "Servidor nao respondeu ao protocolo de voz",
+    })
+}
+
+
+fn state_is_helper_online(state: &Negotiation) -> bool {
+    state.last_helper_reply.is_some_and(|t| t.elapsed() < Duration::from_secs(3))
+}
+/// Sends only to 127.0.0.1. The secret is held in memory and never logged.
+pub fn ipc_tick(
+    position: [f64; 3],
+    yaw: f32,
+    players: &[([u8; 16], [f64; 3])],
+    talk: bool,
+    volume: u8,
+) -> Option<(i32, bool, bool)> {
+    NEGOTIATION.with(|cell| {
+        let mut state = cell.borrow_mut();
+        if state.secret.is_none() { return None; }
+        if state.ipc.is_none() {
+            state.ipc = crate::game::redescreen_voice_ipc::Ipc::open();
+        }
+        if state.ipc.is_none() { return None; }
+        let now = Instant::now();
+        if state.last_hello.is_none_or(|last| now.duration_since(last) >= Duration::from_secs(2)) {
+            if let Some(raw) = state.raw_secret.as_ref() {
+                state.ipc.as_ref().unwrap().hello(&state.address, state.protocol, raw);
+            }
+            state.last_hello = Some(now);
+        }
+        if state.last_state.is_none_or(|last| now.duration_since(last) >= Duration::from_millis(100)) {
+            state.ipc.as_ref().unwrap().state(talk, false, volume, position, yaw, players);
+            state.last_state = Some(now);
+        }
+        if let Some(code) = state.ipc.as_ref().unwrap().status() {
+            state.helper_status = Some(code);
+            state.last_helper_reply = Some(now);
+        }
+        if !state_is_helper_online(&state) { return None; }
+        let desired = match state.helper_status? {
+            1 => (false, false),
+            2 => (true, false),
+            3 | 4 => (true, true),
+            _ => return None,
+        };
+        if state.last_reported == Some(desired) { return None; }
+        state.last_reported = Some(desired);
+        Some((state.protocol, desired.0, desired.1))
     })
 }
 
