@@ -1,0 +1,8 @@
+[package]
+name = "redescreen-voice-native"
+version = "0.3.0-alpha.1"
+edition = "2024"
+publish = false
+
+[lib]
+path = "mixins/redescreen_voice/runtime.rs"
