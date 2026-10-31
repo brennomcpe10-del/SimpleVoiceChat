@@ -8,6 +8,13 @@ fn redescreen_voice_tick(game: &mut crate::game::Game<'_>) {
     let ready = game.native_on(voice::ID)
         && game.remote.as_ref().is_some_and(|r| r.joined && r.logged_in && r.reconfiguring.is_none());
     let address = game.remote.as_ref().map(|r| r.session.address.as_str());
+    if ready {
+        for packet in horizon_client::net::redescreen_voice_bridge::drain() {
+            voice::on_secret(&packet);
+        }
+    } else {
+        horizon_client::net::redescreen_voice_bridge::clear();
+    }
     let actions = voice::on_tick(address, ready);
     use horizon_protocol::packets::{configuration::CustomPayload, play::Serverbound};
     for action in actions {
