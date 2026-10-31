@@ -40,12 +40,12 @@ jobs:
         shell: python
         run: |
           import json, zipfile
-          path='native/target/redescreen_voice-0.3.0-alpha.1.hnmod'
+          path='native/target/redescreen_voice-0.3.0-alpha.2.hnmod'
           with zipfile.ZipFile(path) as z:
               names=set(z.namelist())
               manifest=json.loads(z.read('horizon-native.json'))
               assert manifest['id']=='redescreen_voice'
-              assert manifest['version']=='0.3.0-alpha.1'
+              assert manifest['version']=='0.3.0-alpha.2'
               assert manifest['game']=='26.3'
               assert manifest['hooks']==1
               assert 'mixins/redescreen_voice/horizon-mixin.toml' in names
@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: redescreen-voice-hnmod-NOT-PLAYABLE
-          path: horizon-mods/native/target/redescreen_voice-0.3.0-alpha.1.hnmod
+          path: horizon-mods/native/target/redescreen_voice-0.3.0-alpha.2.hnmod
           if-no-files-found: error
 
   compile:
