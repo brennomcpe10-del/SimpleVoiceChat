@@ -12,6 +12,13 @@ file = "crates/horizon-client/src/game.rs"
 name = "redescreen_voice"
 source = "runtime.rs"
 
+[[module]]
+id = "bridge"
+file = "crates/horizon-client/src/net.rs"
+name = "redescreen_voice_bridge"
+source = "bridge.rs"
+visibility = "pub"
+
 [[injection]]
 id = "key"
 kind = "HEAD"
