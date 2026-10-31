@@ -6,7 +6,7 @@ This repository hosts the **v0.2.0 source qualification workflow** for an experi
 
 ## Contents and workflow
 
-The source is distributed in **`Horizon-Simple-Voice-Chat-RedeScreen-Edition-0.2.0-fontes (1).zip`** (original Work ZIP; SHA-256 `d01e9465e8729a4a52da0cc1a7dabfae0b7e1e83e0f676f3b2b8dd94d6917c68`). It contains the standalone Rust voice core, integration patch, protocol tests, documentation and test helpers. The original ZIP includes an upstream Horizon source snapshot, which CI discards and replaces with a pinned upstream checkout.
+The source is distributed in **`SimpleVoiceChat-v0.2.0-source.zip.zip`** (277,977 bytes; SHA-256 is printed by the CI verification step). It contains the standalone Rust voice core, integration patch, protocol tests, documentation and test helpers. The uploaded ZIP contains a single top-level project directory with the Rust core, integration patch and tests, without the full upstream Horizon tree. CI unpacks that directory and checks out the pinned upstream revision.
 
 The manually triggered **Windows voice qualification** workflow:
 
@@ -36,3 +36,7 @@ The archive was provided by the project owner after a ChatGPT Work development s
 ## Next milestone
 
 Investigate a genuine native-mod implementation or upstream Horizon hook support for the necessary direct Minecraft custom payloads, audio devices, AES-GCM and Opus dependencies. Only submit to the registry after `cargo horizon-mod check` succeeds on the **actual `.hnmod`** and the functional tests are complete.
+
+## GitHub Actions qualification
+
+The initial Windows qualification was triggered as [run #41250402765](https://github.com/brennomcpe10-del/SimpleVoiceChat/actions/runs/41250402765) on 2026-10-31. **The outcome is not yet verified.** Do not claim Windows compatibility or registry readiness based on the existence of this run.
