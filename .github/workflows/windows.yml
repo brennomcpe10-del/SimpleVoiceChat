@@ -1,0 +1,122 @@
+name: Windows voice qualification (experimental)
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Verify and extract owner-provided source archive
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $archive = 'SimpleVoiceChat-v0.2.0-source.zip'
+          if (-not (Test-Path $archive)) { throw "Missing $archive. Upload the exact reviewed source ZIP before running this workflow." }
+          $expected = 'fbdd8fc42ca2fe59bd9a079d568c2f8bc67a2b8b24a28e468aa09ba7f13db985'
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Source ZIP SHA-256 mismatch: $actual" }
+          New-Item -ItemType Directory -Path work | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath work
+          if (-not (Test-Path 'work/integration/horizon.patch')) { throw 'Missing integration patch' }
+          if (-not (Test-Path 'work/Cargo.lock')) { throw 'Missing Cargo.lock' }
+
+      - name: Checkout pinned official Horizon and apply voice integration
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          git init work/horizon
+          git -C work/horizon remote add origin https://github.com/horizon-rust/horizon.git
+          git -C work/horizon fetch --depth 1 origin a4873dec445a5f619bc2200069f65a76dc170a0c
+          git -C work/horizon checkout --detach FETCH_HEAD
+          git -C work/horizon apply --check ../integration/horizon.patch
+          git -C work/horizon apply ../integration/horizon.patch
+          git -C work/horizon status --short
+
+      - name: Install Rust toolchain
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup override set 1.99.1
+
+      - name: Test voice core
+        working-directory: work
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          cargo test --locked --features devices
+
+      - name: Protocol interoperability tests
+        working-directory: work
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          python tools/fetch_test_netty.py "$env:RUNNER_TEMP/netty"
+          foreach ($sha in @('2e56198016e02fd99139d37f382b7155c5bd63f5', '90e49b73d6a43f201b8ef854698af70642986001')) {
+            $source = "$env:RUNNER_TEMP/svc-$sha"
+            git init $source
+            git -C $source fetch --depth 1 https://github.com/henkelmax/simple-voice-chat $sha
+            git -C $source checkout --detach FETCH_HEAD
+            python tests/interop/run.py $source "$env:RUNNER_TEMP/netty"
+          }
+
+      - name: Build patched Horizon client for Windows x64
+        working-directory: work
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          cargo build --manifest-path horizon/Cargo.toml --locked -p horizon-client --bin horizon-client --profile fast
+          $candidate = 'horizon/target/fast/horizon-client.exe'
+          if (-not (Test-Path $candidate)) { throw 'Windows executable not produced' }
+          $env:HORIZON_HOME = "$env:RUNNER_TEMP/voice-game"
+          $env:HORIZON_LAUNCHER_HOME = "$env:RUNNER_TEMP/voice-launcher"
+          & $candidate --help
+          if ($LASTEXITCODE -ne 0) { throw 'Client CLI smoke test failed' }
+
+      - name: Scan candidate with Windows Defender
+        working-directory: work
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $candidate = (Resolve-Path 'horizon/target/fast/horizon-client.exe').Path
+          if (-not (Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue)) { throw 'Defender is unavailable on runner' }
+          if (-not (Get-MpComputerStatus).AntivirusEnabled) { throw 'Defender antivirus is not enabled' }
+          $scanner = Get-ChildItem "$env:ProgramData/Microsoft/Windows Defender/Platform/*/MpCmdRun.exe" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $scanner) { throw 'Defender scanner unavailable' }
+          & $scanner.FullName -Scan -ScanType 3 -File $candidate
+          if ($LASTEXITCODE -ne 0) { throw "Defender scan failed: $LASTEXITCODE" }
+          if (-not (Test-Path $candidate)) { throw 'Candidate removed after scan' }
+          $hits = Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object { ($_.Resources -join ' ').Contains($candidate) }
+          if ($hits) { throw 'Defender reported a detection for the candidate' }
+
+      - name: Package isolated test candidate
+        working-directory: work
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path candidate | Out-Null
+          Copy-Item horizon/target/fast/horizon-client.exe candidate/horizon-client.exe
+          $hash = (Get-FileHash candidate/horizon-client.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  horizon-client.exe" | Set-Content -Encoding ascii candidate/SHA256SUMS.txt
+          @'
+          EXPERIMENTAL PATCHED HORIZON CLIENT — NOT A NATIVE .HNMOD.
+          No successful in-game test on RedeScreen has been demonstrated.
+          Do not replace the official Horizon installation.
+          Use only in an isolated test instance after verifying SHA-256.
+          '@ | Set-Content -Encoding utf8 candidate/READ_FIRST.txt
+
+      - name: Upload test candidate only after checks pass
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-x64-EXPERIMENTAL-test-candidate
+          path: work/candidate/
+          retention-days: 7
