@@ -48,15 +48,45 @@ jobs:
         run: |
           Set-Location $env:VOICE_PROJECT
           cargo build --release --locked --features devices --bin voice_helper
+      - name: Checkout official Horizon mod packager
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mods
+          ref: 3fc6964447ff1ace0bdb252b65b1a273649e5ef4
+          path: horizon-mods
+      - name: Package original-Horizon .hnmod alongside helper
+        shell: pwsh
+        run: |
+          Copy-Item -Path "native/redescreen_voice" -Destination "horizon-mods/native/redescreen_voice" -Recurse -Force
+          Push-Location "horizon-mods"
+          python native/tools/native.py package redescreen_voice
+          Pop-Location
       - name: Stage helper executable and checksum
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "dist" | Out-Null
           Copy-Item (Join-Path $env:CARGO_TARGET_DIR "release/voice_helper.exe") "dist/redescreen-voice-helper.exe"
-          (Get-FileHash "dist/redescreen-voice-helper.exe" -Algorithm SHA256).Hash | Out-File "dist/SHA256.txt" -Encoding ascii
+          Copy-Item "horizon-mods/native/target/redescreen_voice-0.4.0-beta.1.hnmod" "dist/redescreen_voice-0.4.0-beta.1.hnmod"
+          Get-FileHash "dist/redescreen-voice-helper.exe","dist/redescreen_voice-0.4.0-beta.1.hnmod" -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } | Out-File "dist/SHA256.txt" -Encoding ascii
+          @'
+          KIT EXPERIMENTAL REDESCREEN VOICE - HORIZON ORIGINAL 26.3
+
+          1. Instale o .hnmod no Horizon Launcher, em Mods > Add from GitHub:
+             https://github.com/brennomcpe10-del/SimpleVoiceChat/tree/native-hnmod
+             Ou use o comando native-build apontando para o .hnmod.
+          2. No launcher, execute Native build e autorize apenas se confiar no codigo.
+             O primeiro build pode levar alguns minutos e ocupar espaco em disco.
+          3. Antes de abrir o Horizon, execute redescreen-voice-helper.exe.
+          4. Entre no servidor, pressione V para verificar o status e
+             segure ALT esquerdo para falar. Opcoes > Mods muda o modo.
+          5. Se o Windows Defender alertar, verifique o arquivo; nao desative a protecao.
+
+          Este kit nao foi testado com usuarios reais no RedeScreen.
+          O .exe NAO e outro Horizon; e apenas um auxiliar de audio.
+          '@ | Out-File "dist/LEIA-ME.txt" -Encoding utf8
       - name: Upload companion (not a Horizon executable)
         uses: actions/upload-artifact@v4
         with:
-          name: redescreen-voice-helper-windows-x64
+          name: redescreen-voice-0.4.0-beta.1-windows-x64-KIT
           path: dist/*
           if-no-files-found: error
