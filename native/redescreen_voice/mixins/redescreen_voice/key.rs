@@ -1,4 +1,4 @@
-// Native key bindings. No microphone is opened in this stage.
+// Native key bindings. Audio is captured only while PTT is held (or open mode is selected).
 fn redescreen_voice_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     use crate::game::redescreen_voice as voice;
     if !game.native_on(voice::ID) {
@@ -11,6 +11,6 @@ fn redescreen_voice_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bo
     }
     let menu = game.native_mod_key(voice::ID, "menu", "key.keyboard.v");
     if key == menu && pressed && game.native_playing() {
-        game.native_chat("Simple Voice Chat: adaptador nativo em teste; voz ainda indisponivel. Configuracoes em Opcoes > Mods.");
+        game.native_chat(&format!("RedeScreen Voice: {}. Configuracoes em Opcoes > Mods.", voice::status()));
     }
 }
