@@ -1,0 +1,44 @@
+name: HNMOD registry validation
+
+on:
+  push:
+    branches: [native-hnmod]
+    paths:
+      - 'native/**'
+      - '.github/workflows/registry-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  registry-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout adapter
+        uses: actions/checkout@v4
+      - name: Checkout official native package tooling
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mods
+          ref: 3fc6964447ff1ace0bdb252b65b1a273649e5ef4
+          path: horizon-mods
+      - name: Checkout official Horizon registry checker
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          ref: 10b16c4b94d6ebdf3234545f53243c6466dfa32c
+          path: horizon
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Package using official native.py
+        run: |
+          cp -a native/redescreen_voice horizon-mods/native/redescreen_voice
+          cd horizon-mods
+          python3 native/tools/native.py package redescreen_voice
+      - name: Check with Horizon's actual registry checker
+        shell: bash
+        run: |
+          FILE="$GITHUB_WORKSPACE/horizon-mods/native/target/redescreen_voice-0.3.0-alpha.1.hnmod"
+          cargo run --locked --manifest-path horizon/Cargo.toml -p cargo-horizon-mod -- check "$FILE" --json
